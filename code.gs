@@ -900,22 +900,24 @@ function refreshFromEcowitt_() {
       conditions.uv = Number(ecowittConditions.data.last_update.solar_and_uvi.uvi.value);
     }
   }
-  if (ecowittConditions.data?.last_update?.rainfall?.rain_rate?.value) {
+  // haptic rain sensors (WS85, WS90 "Wittboy") report under rainfall_piezo instead of rainfall, with the same child keys
+  let rainfall = ecowittConditions.data?.last_update?.rainfall ?? ecowittConditions.data?.last_update?.rainfall_piezo;
+  if (rainfall?.rain_rate?.value) {
     conditions.precipRate = {
-      "in": convert.toFixed(ecowittConditions.data.last_update.rainfall.rain_rate.value, 3),
-      "mm": convert.toFixed(convert.inTomm(ecowittConditions.data.last_update.rainfall.rain_rate.value), 2)
+      "in": convert.toFixed(rainfall.rain_rate.value, 3),
+      "mm": convert.toFixed(convert.inTomm(rainfall.rain_rate.value), 2)
     };
   }
-  if (ecowittConditions.data?.last_update?.rainfall?.daily?.value) {
+  if (rainfall?.daily?.value) {
     conditions.precipSinceMidnight = {
-      "in": convert.toFixed(ecowittConditions.data.last_update.rainfall.daily.value, 3),
-      "mm": convert.toFixed(convert.inTomm(ecowittConditions.data.last_update.rainfall.daily.value), 2)
+      "in": convert.toFixed(rainfall.daily.value, 3),
+      "mm": convert.toFixed(convert.inTomm(rainfall.daily.value), 2)
     };
   }
-  if (ecowittConditions.data?.last_update?.rainfall?.hourly?.value) {
+  if (rainfall?.hourly?.value) {
     conditions.precipLastHour = {
-      "in": convert.toFixed(ecowittConditions.data.last_update.rainfall.hourly.value, 3),
-      "mm": convert.toFixed(convert.inTomm(ecowittConditions.data.last_update.rainfall.hourly.value), 2)
+      "in": convert.toFixed(rainfall.hourly.value, 3),
+      "mm": convert.toFixed(convert.inTomm(rainfall.hourly.value), 2)
     };
   }
   // if Ecowitt doesn't provide hourly accumulation but does provide rate, calculate it
