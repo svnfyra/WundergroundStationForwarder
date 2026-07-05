@@ -901,35 +901,52 @@ function refreshFromEcowitt_() {
     }
   }
   // haptic rain sensors (WS85, WS90 "Wittboy") report under rainfall_piezo instead of rainfall, with the same child keys.
-  // some consoles report both groups, with the group for the missing sensor zero-filled and stale, so prefer the most recently updated one
+  // consoles can report both groups, with the group for the missing sensor zero-filled — sometimes with stale timestamps,
+  // sometimes freshly stamped — so prefer the most recently updated group, breaking ties by which gauge has accumulated any rain.
+  // values are strings and can be placeholders like "--" for uninitialized sensors, so parse defensively
+  let rainNumber = leaf => {
+    let value = Number.parseFloat(leaf?.value);
+    return Number.isFinite(value) ? value : null;
+  };
+  let rainGroupTime = group => Number(group?.rain_rate?.time ?? group?.daily?.time ?? 0);
+  let rainGroupTotal = group => Math.max(...['daily', 'event', 'weekly', 'monthly', 'yearly'].map(key => rainNumber(group?.[key]) ?? 0));
   let traditionalRainfall = ecowittConditions.data?.last_update?.rainfall;
   let piezoRainfall = ecowittConditions.data?.last_update?.rainfall_piezo;
-  let rainfallGroupTime = group => Number(group?.rain_rate?.time ?? group?.daily?.time ?? 0);
-  let rainfall = rainfallGroupTime(piezoRainfall) > rainfallGroupTime(traditionalRainfall) ? piezoRainfall : traditionalRainfall;
-  if (rainfall?.rain_rate?.value) {
+  let rainfall = traditionalRainfall ?? piezoRainfall;
+  if (traditionalRainfall && piezoRainfall) {
+    if (rainGroupTime(piezoRainfall) > rainGroupTime(traditionalRainfall)) {
+      rainfall = piezoRainfall;
+    } else if (rainGroupTime(piezoRainfall) === rainGroupTime(traditionalRainfall) && rainGroupTotal(traditionalRainfall) === 0 && rainGroupTotal(piezoRainfall) > 0) {
+      rainfall = piezoRainfall;
+    }
+  }
+  let rainRate = rainNumber(rainfall?.rain_rate);
+  if (rainRate != null) {
     conditions.precipRate = {
-      "in": convert.toFixed(rainfall.rain_rate.value, 3),
-      "mm": convert.toFixed(convert.inTomm(rainfall.rain_rate.value), 2)
+      "in": convert.toFixed(rainRate, 3),
+      "mm": convert.toFixed(convert.inTomm(rainRate), 2)
     };
   }
-  if (rainfall?.daily?.value) {
+  let rainDaily = rainNumber(rainfall?.daily);
+  if (rainDaily != null) {
     conditions.precipSinceMidnight = {
-      "in": convert.toFixed(rainfall.daily.value, 3),
-      "mm": convert.toFixed(convert.inTomm(rainfall.daily.value), 2)
+      "in": convert.toFixed(rainDaily, 3),
+      "mm": convert.toFixed(convert.inTomm(rainDaily), 2)
     };
   }
   // device/info responses name the hourly accumulation "1_hour"; real_time responses name it "hourly"
-  let hourlyRainfall = rainfall?.hourly ?? rainfall?.['1_hour'];
-  if (hourlyRainfall?.value) {
+  let rainHourly = rainNumber(rainfall?.hourly) ?? rainNumber(rainfall?.['1_hour']);
+  if (rainHourly != null) {
     conditions.precipLastHour = {
-      "in": convert.toFixed(hourlyRainfall.value, 3),
-      "mm": convert.toFixed(convert.inTomm(hourlyRainfall.value), 2)
+      "in": convert.toFixed(rainHourly, 3),
+      "mm": convert.toFixed(convert.inTomm(rainHourly), 2)
     };
   }
-  if (rainfall?.['24_hours']?.value) {
+  let rainLast24Hours = rainNumber(rainfall?.['24_hours']);
+  if (rainLast24Hours != null) {
     conditions.precipLast24Hours = {
-      "in": convert.toFixed(rainfall['24_hours'].value, 3),
-      "mm": convert.toFixed(convert.inTomm(rainfall['24_hours'].value), 2)
+      "in": convert.toFixed(rainLast24Hours, 3),
+      "mm": convert.toFixed(convert.inTomm(rainLast24Hours), 2)
     };
   }
   // if Ecowitt doesn't provide hourly accumulation but does provide rate, calculate it
