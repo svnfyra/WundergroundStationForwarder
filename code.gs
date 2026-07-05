@@ -900,8 +900,12 @@ function refreshFromEcowitt_() {
       conditions.uv = Number(ecowittConditions.data.last_update.solar_and_uvi.uvi.value);
     }
   }
-  // haptic rain sensors (WS85, WS90 "Wittboy") report under rainfall_piezo instead of rainfall, with the same child keys
-  let rainfall = ecowittConditions.data?.last_update?.rainfall ?? ecowittConditions.data?.last_update?.rainfall_piezo;
+  // haptic rain sensors (WS85, WS90 "Wittboy") report under rainfall_piezo instead of rainfall, with the same child keys.
+  // some consoles report both groups, with the group for the missing sensor zero-filled and stale, so prefer the most recently updated one
+  let traditionalRainfall = ecowittConditions.data?.last_update?.rainfall;
+  let piezoRainfall = ecowittConditions.data?.last_update?.rainfall_piezo;
+  let rainfallGroupTime = group => Number(group?.rain_rate?.time ?? group?.daily?.time ?? 0);
+  let rainfall = rainfallGroupTime(piezoRainfall) > rainfallGroupTime(traditionalRainfall) ? piezoRainfall : traditionalRainfall;
   if (rainfall?.rain_rate?.value) {
     conditions.precipRate = {
       "in": convert.toFixed(rainfall.rain_rate.value, 3),
@@ -914,10 +918,18 @@ function refreshFromEcowitt_() {
       "mm": convert.toFixed(convert.inTomm(rainfall.daily.value), 2)
     };
   }
-  if (rainfall?.hourly?.value) {
+  // device/info responses name the hourly accumulation "1_hour"; real_time responses name it "hourly"
+  let hourlyRainfall = rainfall?.hourly ?? rainfall?.['1_hour'];
+  if (hourlyRainfall?.value) {
     conditions.precipLastHour = {
-      "in": convert.toFixed(rainfall.hourly.value, 3),
-      "mm": convert.toFixed(convert.inTomm(rainfall.hourly.value), 2)
+      "in": convert.toFixed(hourlyRainfall.value, 3),
+      "mm": convert.toFixed(convert.inTomm(hourlyRainfall.value), 2)
+    };
+  }
+  if (rainfall?.['24_hours']?.value) {
+    conditions.precipLast24Hours = {
+      "in": convert.toFixed(rainfall['24_hours'].value, 3),
+      "mm": convert.toFixed(convert.inTomm(rainfall['24_hours'].value), 2)
     };
   }
   // if Ecowitt doesn't provide hourly accumulation but does provide rate, calculate it
